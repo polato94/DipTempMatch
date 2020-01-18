@@ -1,0 +1,40 @@
+pimport cv2
+from matplotlib import pyplot as plt
+
+import imutils as utils
+import glob
+import initdata as init
+
+# read background image for shading correction
+imgbackground = cv2.imread('../../img/Other/image_100.jpg')
+
+# read all images from folders given in a list
+imageDir = "../../img/All/"    # specify the path here
+
+image_path_list = glob.glob(imageDir + "*.jpg")
+
+template, defects = init.initdata()
+defects_classifiers = dict.fromkeys(defects)
+
+# loop through image_path_list to open each image
+for imagePath in image_path_list:
+    img = cv2.imread(imagePath)
+    if img is None:
+        print("Error loading: " + imagePath)
+        # end this loop iteration and move on to next image
+        continue
+
+    """
+    ... perform defect detection here
+    """
+    img_processed = img
+
+    f, (ax1, ax2) = plt.subplots(1, 2)
+    ax1.imshow(cv2.cvtColor(img, cv2.COLOR_BGR2RGB))
+    ax1.axis("off")
+    ax1.set_title(imagePath)
+    ax2.imshow(img_processed, cmap='gray')
+    ax2.axis("off")
+    ax2.set_title("Processed image")
+    plt.show()
+
