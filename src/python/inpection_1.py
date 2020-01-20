@@ -1,5 +1,6 @@
 import cv2
 from matplotlib import pyplot as plt
+from termcolor import colored
 
 import imutils as utils
 import glob
@@ -8,22 +9,38 @@ import numpy as np
 import operator
 import numpy.random as rd
 import matplotlib.pyplot as plt
+import cvHelper as cvh
 import time
+import types
 
 ###########fummelfaktoren###############
 
 
-generations = 10
-matrices_per_generation = 350
+generations = 100
+matrices_per_generation = 100
 
-fittest_num = int(round( matrices_per_generation/8))
 
+fittest_num = int(round( matrices_per_generation/6))
+save_fittest = 4
 
 #adjusts the dynamic of the mutations
-shrinking_scale = 1.5
-scalefactor = 1.01
-
+shrinking_scale_start = 1.5
+shrinking_scale = shrinking_scale_start
+scalefactor = 1.02
+scale_min = 0.5
+mutate_percent = 10
+muta_factor = 1.01
+muta_max = 50
+rising_mutating = mutate_percent
 ##########################  
+
+#methods = ['cv2.TM_CCOEFF', 'cv2.TM_CCOEFF_NORMED', 'cv2.TM_CCORR', 'cv2.TM_CCORR_NORMED', 'cv2.TM_SQDIFF', 'cv2.TM_SQDIFF_NORMED']
+#methods = ['cv2.TM_CCOEFF', 'cv2.TM_CCOEFF_NORMED', 'cv2.TM_CCORR', 'cv2.TM_CCORR_NORMED']
+methods = ['cv2.TM_CCOEFF', 'cv2.TM_CCORR', 'cv2.TM_CCORR_NORMED']
+#methods = ['cv2.TM_CCOEFF', 'cv2.TM_CCORR']
+#methods = ['cv2.TM_CCOEFF']
+#methods = ['cv2.TM_CCORR']
+
 
 
 class th_mat_mem:
@@ -31,45 +48,55 @@ class th_mat_mem:
    th_matrix = []
    matrix_created = False
 
+   def g_matrix(self):
+         return np.array([
+                            np.random.uniform(-100000, 100000, 8),
+                            #np.random.uniform(-1, 1, 8),
+                            np.random.uniform(-100000, 100000, 8),
+                            np.random.uniform(-1, 1, 8),
+                            #np.random.uniform(-1000000000, 1000000000, 8),
+                            #np.random.uniform(-1, 1, 8)
+                            ])
+
   
 
    def adjust_score(self, score):
       self.score = score
       
    def generate_matrix(self):
-         self.th_matrix = np.array([
-                            np.random.uniform(-100000, 100000, 8),
-                            np.random.uniform(-1, 1, 8),
-                            np.random.uniform(-100000, 100000, 8),
-                            np.random.uniform(-1, 1, 8),
-                            np.random.uniform(-1000000000, 1000000000, 8),
-                            np.random.uniform(-1, 1, 8)])
+         self.th_matrix = self.g_matrix()
          self.matrix_created = True
 
    def generate_with_seed(self, scale, seed):
-        add_matrix = np.array([
-                              np.random.uniform(-100000, 100000, 8),
-                              np.random.uniform(-1, 1, 8),
-                              np.random.uniform(-100000, 100000, 8),
-                              np.random.uniform(-1, 1, 8),
-                              np.random.uniform(-1000000000, 1000000000, 8),
-                              np.random.uniform(-1, 1, 8)])
+        add_matrix = self.g_matrix()
         self.th_matrix = seed + add_matrix * scale
 
-      
+   def shuffle_matrix(self,mat_partner,mutate):
+     if(not self.matrix_created):
+       self.generate_matrix()
+     else:
+       for i in range(0, len(self.th_matrix)):
+         if np.random.randint(0,1) == 0:           
+           self.th_matrix[i] = mat_partner[i]
+         #else:
+         #  self.th_matrix[i] = self.th_matrix[i] * (1 + (np.random.randint(-mutate,mutate)/100))
+           
+
+       
+   def mutate_matrix(self,mutate):
+     if(not self.matrix_created):
+       self.generate_matrix()
+     else:
+       for i in range(0, len(self.th_matrix)):
+         self.th_matrix[i] = self.th_matrix[i] * (1 + (np.random.randint(-mutate,mutate)/100))
+
       
    def adjust_matrix(self, scale):
       #generate adjustment
       if(not self.matrix_created):
         self.generate_matrix()
       else:
-        add_matrix = np.array([
-                              np.random.uniform(-100000, 100000, 8),
-                              np.random.uniform(-1, 1, 8),
-                              np.random.uniform(-100000, 100000, 8),
-                              np.random.uniform(-1, 1, 8),
-                              np.random.uniform(-1000000000, 1000000000, 8),
-                              np.random.uniform(-1, 1, 8)])
+        add_matrix = self.g_matrix()
   
         self.th_matrix = self.th_matrix + add_matrix * scale
 
@@ -80,7 +107,15 @@ class th_mat_mem:
 
 #    methods = ['cv2.TM_CCOEFF', 'cv2.TM_CCOEFF_NORMED', 'cv2.TM_CCORR', 'cv2.TM_CCORR_NORMED', 'cv2.TM_SQDIFF', 'cv2.TM_SQDIFF_NORMED']
 
-
+class bcolors:
+    HEADER = '\033[95m'
+    OKBLUE = '\033[94m'
+    OKGREEN = '\033[92m'
+    WARNING = '\033[93m'
+    FAIL = '\033[91m'
+    ENDC = '\033[0m'
+    BOLD = '\033[1m'
+    UNDERLINE = '\033[4m'
 
 def subimage(image, center, theta, width, height):
 
@@ -105,9 +140,38 @@ def subimage(image, center, theta, width, height):
 
    return image
  
-def get_template_results(img, defects):
+def get_template_results2(methods,img,defects,imagePath,imgbackground):
+  cvh.imgplot(img,imagePath)
+  cvh.imgplot(imgbackground,"back")
+  
+  img_procc = img.copy() 
+
+  
+  
+  img_procc = utils.shadding(img_procc,imgbackground)
+  cvh.imgplot(img_procc,"div")
+  cvh.plothist(img_procc,"hist")
+  
+  img_procc = cv2.cvtColor(img_procc, cv2.COLOR_BGR2GRAY)
+  cvh.imgplot(img_procc,"grey")
+  
+  #img_procc = cvh.gray_spread(img_procc)
+  #cvh.imgplot(img_procc,"grey")
+  
+  #img_procc = utils.imclearborder(img_procc,10)
+  #cvh.imgplot(img_procc,"imclearborder")
+  
+  img_procc = utils.bwareaopen(img_procc,20)
+  cvh.imgplot(img_procc,"bwareaopen")
+  
+  
+  return
+  
+def get_template_results(methods,img, defects):
 
     #print("Image shape = ",img.shape)
+    
+  
     bg_b,bg_g,bg_r = cv2.split(imgbackground)
     bg_r = bg_r + 0.0001
     bg_b = bg_b + 0.0001
@@ -134,20 +198,29 @@ def get_template_results(img, defects):
 
     #convert to gray
     img_gray = cv2.cvtColor(img_processed, cv2.COLOR_BGR2GRAY)
-
+    #slice_am = 25
+    #img_gray = img_gray[slice_am:np.shape(img_gray)[0]-slice_am,:]
+    #cvh.imgplot(img_gray, "sliced")
     #img_gray = clahe.apply(img_gray)
 
-    
+    #cv2.namedWindow('image', cv2.WINDOW_NORMAL)
     kernel_open = cv2.getStructuringElement(cv2.MORPH_RECT, (3,3))
     img_processed = cv2.morphologyEx(img_gray, cv2.MORPH_OPEN, kernel_open, iterations=2)
     #cv2.imshow("opening", img_gray)
+    #cv2.waitKey(0)
     kernel_closing = cv2.getStructuringElement(cv2.MORPH_RECT, (7,7))
     img_processed = cv2.morphologyEx(img_processed, cv2.MORPH_CLOSE, kernel_closing, iterations = 1)
     # Converting image to a binary image 
     # ( black and white only image).
     #cv2.imshow("closing", img_processed)
+    #cv2.waitKey(0)
     _, threshold = cv2.threshold(img_processed, 115, 255, cv2.THRESH_BINARY) 
     #cv2.imshow("threshold",threshold)
+    
+    
+    
+    
+    
     #Detecting contours in image. 
     contours, _= cv2.findContours(threshold, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE) 
     a = 0;
@@ -155,7 +228,7 @@ def get_template_results(img, defects):
     target=0;
     for cnt in contours:
         approx = cv2.approxPolyDP(cnt, 0.009 * cv2.arcLength(cnt, True), True) 
-        #cv2.drawContours(img_gray,[approx], 0, (0,0,255),5)
+        cv2.drawContours(img_gray,[approx], 0, (0,0,255),5)
         #draw rectangle around contour
         rect = cv2.minAreaRect(cnt)
         box = cv2.boxPoints(rect)
@@ -166,7 +239,9 @@ def get_template_results(img, defects):
         if ((a_n > a) and (rect[1][0] < 280)):
             a = a_n
             target = rect
-
+            
+    #cv2.waitKey(0)
+    #cv2.destroyAllWindows()
     #print(str(target))
     #print(img_gray.shape)
     if(target != 0):
@@ -176,9 +251,14 @@ def get_template_results(img, defects):
         center_x = int(target[0][0])
         center_y = int(target[0][1])
         
+        #image_cut = utils.rotate_around_point(img,phi,(center_x,center_y))
+        #img = img[slice_am:np.shape(img)[0]-slice_am,:]
         image_cut = subimage(img, center=(center_x,center_y), theta = phi, width=int(target[1][0])+35, height=int(target[1][1]+35))
+        
         #print(image_cut.shape[0])
+        #cvh.showRectangle(img_gray, (center_x,center_y), 10, 10)
         if((image_cut.shape[0] == 0) or (image_cut.shape[1] == 0)):
+            
             print("could not cut image")
             return img_gray, 0;
         
@@ -196,10 +276,10 @@ def get_template_results(img, defects):
        image_cut = cv2.rotate(image_cut, cv2.ROTATE_90_COUNTERCLOCKWISE)
 
     #cv2.imshow("cut image",image_cut)
-
+    #cv2.waitKey()
 
     #########Start Template Matching
-    methods = ['cv2.TM_CCOEFF', 'cv2.TM_CCOEFF_NORMED', 'cv2.TM_CCORR', 'cv2.TM_CCORR_NORMED', 'cv2.TM_SQDIFF', 'cv2.TM_SQDIFF_NORMED']
+    
 
 
     #print("cut image shape --before interpol", image_cut.shape)
@@ -249,7 +329,10 @@ def get_template_results(img, defects):
              
     return template_results
 
-def inspect_image(img, defects, threshold_matrix):
+
+
+
+def inspect_image(methods,img, defects, threshold_matrix):
     voting_array =np.array( [0,0,0,0,0,0,0,0])
     #print("Image shape = ",img.shape)
     bg_b,bg_g,bg_r = cv2.split(imgbackground)
@@ -343,7 +426,7 @@ def inspect_image(img, defects, threshold_matrix):
 
 
     #########Start Template Matching
-    methods = ['cv2.TM_CCOEFF', 'cv2.TM_CCOEFF_NORMED', 'cv2.TM_CCORR', 'cv2.TM_CCORR_NORMED', 'cv2.TM_SQDIFF', 'cv2.TM_SQDIFF_NORMED']
+    
 
 
     #print("cut image shape --before interpol", image_cut.shape)
@@ -406,7 +489,7 @@ def inspect_image(img, defects, threshold_matrix):
     #find most vote
     max_index = 0;
     val = voting_array[0]
-    for it in range(0,7):
+    for it in range(0,8):
        if(voting_array[it] > val):
           val = voting_array[it]
           max_index = it
@@ -419,9 +502,7 @@ def inspect_image(img, defects, threshold_matrix):
 
 
 
-def test_threshold_matrix(defects,threshold_matrix,results):
-    import types
-    methods = ['cv2.TM_CCOEFF', 'cv2.TM_CCOEFF_NORMED', 'cv2.TM_CCORR', 'cv2.TM_CCORR_NORMED', 'cv2.TM_SQDIFF', 'cv2.TM_SQDIFF_NORMED']
+def test_threshold_matrix(methods,defects,threshold_matrix,results):
     voting_array =np.array( [0,0,0,0,0,0,0,0])
     
     #todo results empty return nothing
@@ -448,7 +529,7 @@ def test_threshold_matrix(defects,threshold_matrix,results):
         #find most vote
         max_index = 0;
         val = voting_array[0]
-        for it in range(0,7):
+        for it in range(0,8):
           if(voting_array[it] > val):
              val = voting_array[it]
              max_index = it
@@ -461,6 +542,7 @@ def test_threshold_matrix(defects,threshold_matrix,results):
 
 # read background image for shading correction
 imgbackground = cv2.imread('../../img/Other/image_100.jpg')
+
 
 template, defects = init.initdata()
 
@@ -492,46 +574,79 @@ for class_label, defect_type in enumerate(defects):
          # read all images from folders given in a list
          images_template_results = list();
          for imagePath in glob.glob(imageDir + "*.jpg"):
-
+            print(imagePath)
             img = cv2.imread(imagePath)
+            
             if img is None:
                print("Error loading: " + imagePath)
                # end this loop iteration and move on to next image
                continue
 
-
-            images_template_results.append(get_template_results(img,defects))
+            img2 = img.copy()
+            #get_template_results2(methods,img2,defects,imagePath, imgbackground)
+            images_template_results.append(get_template_results(methods,img,defects))
          dir_images_template_results.append(images_template_results)
 
 start_time = time.time()
+rando_group_list = list()
 
 for gen in range(0, generations):
 
-   
+   np.set_printoptions(precision=3) 
+  
    #generate and update threashold
-   shrinking_scale = shrinking_scale / scalefactor
+   
+   if shrinking_scale < scale_min:
+      shrinking_scale = scale_min
+   else:     
+      shrinking_scale = shrinking_scale / scalefactor
+      
+   if rising_mutating > muta_max:
+      rising_mutating = muta_max
+   else:     
+      rising_mutating = rising_mutating * muta_factor
+   
    print()
-   print("GENERATION:", gen+1,"/",generations,  "Scale:", shrinking_scale)
+   print("GENERATION:", gen+1,"/",generations,  "Scale:", shrinking_scale, "Mutate:", rising_mutating)
    for mat in matrix_list:
       #reset variables
       y_true, y_pred = [], []   
       y_pred_old, y_true_old = [],[]
       mat_index = matrix_list.index(mat);
+      
+      rando_group = 0;
 
       
       #save first
       #update the best and regenerate the others
       #add 1% random survival
-      if gen > 0 and mat_index == 0:
-          pass
-      elif(mat_index < fittest_num):
-         mat.adjust_matrix(shrinking_scale)
+      if gen > 0 and mat_index < save_fittest:
+         pass 
+        
       elif(mat_index < fittest_num*2):
-         mat.generate_with_seed(shrinking_scale,matrix_list[0].th_matrix)
+         mat.shuffle_matrix(matrix_list[np.random.randint(0,fittest_num-1)].th_matrix,
+                            rising_mutating)
+         mat.mutate_matrix(rising_mutating)
+         rando_group = 1
+         
+      #elif(mat_index < fittest_num*3):
+      #   mat.th_matrix = matrix_list[0].th_matrix.copy()
+      #   mat.mutate_matrix(rising_mutating)
+      #   rando_group = 3
+         
       elif(np.random.randint(1,50) == 25):
-        mat.adjust_matrix(shrinking_scale)
+        mat.mutate_matrix(rising_mutating)
+        rando_group = 2
+        
+      elif(np.random.randint(0,1) == 1):
+        mat.generate_matrix()
+        mat.shuffle_matrix(matrix_list[np.random.randint(0,save_fittest-1)].th_matrix,
+                            rising_mutating) 
+        rando_group = 3
+        
       else:
         mat.generate_matrix()
+        rando_group = 4
    
       
     
@@ -541,52 +656,14 @@ for gen in range(0, generations):
           single_folder_img_results = dir_images_template_results[dir_count]
           for img_results in single_folder_img_results:
 
-              predicted_label = test_threshold_matrix(defects, mat.th_matrix, img_results)
+              predicted_label = test_threshold_matrix(methods,defects, mat.th_matrix, img_results)
               
               
               y_pred.append(predicted_label)
               y_true.append(class_label+1)
               img_count = img_count + 0;
           dir_count = dir_count +1;
-      """
       
-      for class_label, defect_type in enumerate(defects):
-
-
-         imageDir = "../../img/" + defects[defect_type]['dir']
-
-         # read all images from folders given in a list
-
-         for imagePath in glob.glob(imageDir + "*.jpg"):
-
-            img = cv2.imread(imagePath)
-            if img is None:
-               print("Error loading: " + imagePath)
-               # end this loop iteration and move on to next image
-               continue
-
-
-            img_processed, predicted_label = inspect_image(img, defects, mat.th_matrix)
-            #         img_processed = img
-            #         predicted_label = 0
-            
-            y_pred_old.append(predicted_label)
-            y_true_old.append(class_label)  # append real class label to true y's
-         
-            if (do_plot):
-               f, (ax1, ax2) = plt.subplots(1, 2)#
-               ax1.imshow(cv2.cvtColor(img, cv2.COLOR_BGR2RGB))
-               ax1.axis("off")
-               ax1.set_title(imagePath)
-               ax2.imshow(img_processed, cmap='gray')
-               ax2.axis("off")
-               ax2.set_title("Processed image")
-               plt.show()
-
-
-               #from sklearn.metrics import accuracy_
-      #cv2.waitKey(1000)
-              """
 
       from sklearn.metrics import accuracy_score, confusion_matrix
       #print("Matrix:", mat_index+1, '/',matrices_per_generation," Gen:", gen+1, '/', generations ,"Accuracy: ", accuracy_score(y_true, y_pred))
@@ -600,7 +677,12 @@ for gen in range(0, generations):
          # current matrix is better
          best_acc = ma_score
          best_y_pred = y_pred
-         print("better matrix found: ", best_acc)
+         shrinking_scale = shrinking_scale_start
+         rising_mutating = mutate_percent
+         if(gen!=0):
+           rando_group_list.append(rando_group)
+         print(colored("better matrix found: ", 'red'), best_acc, "group:",rando_group)
+         #print(bcolors.WARNING+"better matrix found: "+ bcolors.ENDC, best_acc, "group:",rando_group)
          
         # best_mat = thr_matrix
 
@@ -611,10 +693,11 @@ for gen in range(0, generations):
    #print scores:
    best_acc_list.append(matrix_list[0].score);
    for best in range(fittest_num):
-     print("score", matrix_list[best].score)
-     avg_acc_fittest = avg_acc_fittest + matrix_list[best].score
+     #print("score", matrix_list[best].score)
+     avg_acc_fittest = avg_acc_fittest + matrix_list[best].score     
    avg_acc_fittest = avg_acc_fittest/fittest_num
-   print("avg", avg_acc_fittest)
+   print("top score:",matrix_list[0].score)
+   print("avg score top", fittest_num ,":", avg_acc_fittest)
     
    avg_acc_fittest_list.append(avg_acc_fittest)
    
@@ -630,6 +713,10 @@ for gen in range(0, generations):
 
 print()
 print("--- %s seconds ---" % (time.time() - start_time))
+print("best from group",rando_group_list)
+print("best pred:",best_y_pred)
+print("true:     ",y_true)
+print(confusion_matrix(y_true, best_y_pred))
 
 print("best 3 are")
 for win in range(3):

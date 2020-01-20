@@ -62,7 +62,7 @@ def bwareaopen(imgBW, areaPixels):
    """ Removes all connected components (objects) that have fewer than P pixels from the binary image BW, p
        roducing another binary image, BW2. This operation is known as an area opening. """
    imgBWcopy = imgBW.copy()
-   image, contours,hierarchy = cv2.findContours(imgBWcopy.copy(), cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
+   contours,hierarchy = cv2.findContours(imgBWcopy.copy(), cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
 
    # For each contour, determine its total occupying area
    for idx in np.arange(len(contours)):
@@ -94,7 +94,7 @@ def regionprops(imgbw):
 
    # print image with fitting ellipse
    if 0:
-       cv2.imshow('dbg', cv2.ellipse(image, ellipse,(128,128,0),2))
+       cv2.imshow('dbg', cv2.ellipse(imgbw, ellipse,(128,128,0),2))
 
    return (len(contours)-1), area_vec[idx], [cx,cy], rect, ellipse[2]
 
